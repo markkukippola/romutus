@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mittariskanneri</title>
+
+<script src="https://unpkg.com/@zxing/library@latest"></script>
+
+<style>
+body { margin:0; font-family:sans-serif; background:#111; color:#fff; text-align:center; }
+video { width:100%; height:260px; object-fit:cover; }
+button { width:90%; margin:10px; padding:16px; font-size:18px; border:none; border-radius:10px; }
+.start { background:#2563eb; color:#fff; }
+.stop { background:#444; color:#fff; }
+.send { background:#22c55e; color:#111; }
+.chip { display:inline-block; background:#222; padding:6px 10px; margin:4px; border-radius:6px; font-family:monospace; }
+</style>
+</head>
+
+<body>
+
+<h2>📷 Mittariskanneri</h2>
+
+<video id="video" autoplay muted playsinline></video>
+
+<button class="start" onclick="startScanner()">▶️ Käynnistä skannaus</button>
+<button class="stop" onclick="stopScanner()">⛔ Pysäytä</button>
+
+<p>Skannattu: <span id="count">0</span></p>
+<div id="list"></div>
+
+<button class="send" onclick="submit()">📤 Lähetä</button>
+
+<script>
+let stream = null;
+let codeReader = null;
+let scanning = false;
+let serials = new Set();
+let lastScan = "";
+let lastTime = 0;
+
+function render() {
+  const el = document.getElementById("list");
+  el.innerHTML = "";
+  serials.forEach(s => {
+    const d = document.createElement("div");
+    d.className = "chip";
+    d.textContent = s;
+    el.appendChild(d);
+  });
+  document.getElementById("count").textContent = serials.size;
+}
+
+async function startScanner() {
+  if (scanning) return;
+
+  const video = document.getElementById("video");
+
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "environment" } },
+      audio: false
+    });
+
+    video.srcObject = stream;
+    await video.play();
+
+    codeReader = new ZXing.BrowserMultiFormatReader();
+    scanning = true;
+
+    codeReader.decodeFromVideoElement(video, (result, err) => {
+      if (!scanning) return;
+
+      if (result) {
+        const text = result.text.trim();
+        const now = Date.now();
+
+        // throttle
+        if (text === lastScan && now - lastTime < 1500) return;
+
+        lastScan = text;
+        lastTime = now;
+
+        if (text.length < 4) return;
+
+        if (!serials.has(text)) {
+          serials.add(text);
+          render();
+          if (navigator.vibrate) navigator.vibrate(50);
+        }
+      }
+    });
+
+  } catch (err) {
+    alert("Kamera ei toimi: " + err.message);
+    console.error(err);
+  }
+}
+
+function stopScanner() {
+  scanning = false;
+
+  if (codeReader) codeReader.reset();
+
+  if (stream) {
+    stream.getTracks().forEach(t => t.stop());
+  }
+}
+
+function submit() {
+  alert("Lähetetään:\n\n" + Array.from(serials).join("\n"));
+}
+</script>
+
+</body>
+</html>

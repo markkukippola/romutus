@@ -1,0 +1,111 @@
+<!DOCTYPE html><html lang="fi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mittariskanneri (Quagga2)</title><script src="https://unpkg.com/@ericblade/quagga2/dist/quagga.min.js"></script><style>
+body { margin:0; font-family:sans-serif; background:#111; color:#fff; text-align:center; }
+video, canvas { width:100%; height:260px; object-fit:cover; }
+button { width:90%; margin:10px; padding:16px; font-size:18px; border:none; border-radius:10px; }
+.start { background:#2563eb; color:#fff; }
+.stop { background:#444; color:#fff; }
+.send { background:#22c55e; color:#111; }
+.chip { display:inline-block; background:#222; padding:6px 10px; margin:4px; border-radius:6px; font-family:monospace; }
+#scanner { position:relative; }
+#overlay {
+  position:absolute;
+  top:50%; left:50%;
+  width:80%; height:80px;
+  transform:translate(-50%,-50%);
+  border:2px dashed rgba(255,255,255,0.6);
+}
+</style></head><body><h2>📷 Mittariskanneri (Quagga2)</h2><div id="scanner">
+  <div id="interactive" class="viewport"></div>
+  <div id="overlay"></div>
+</div><button class="start" onclick="startScanner()">▶️ Käynnistä</button> <button class="stop" onclick="stopScanner()">⛔ Pysäytä</button>
+
+<p>Skannattu: <span id="count">0</span></p>
+<div id="list"></div><button class="send" onclick="submit()">📤 Lähetä</button>
+
+<script>
+let scanning = false;
+let serials = new Set();
+let lastScan = "";
+let lastTime = 0;
+
+function render() {
+  const el = document.getElementById("list");
+  el.innerHTML = "";
+  serials.forEach(s => {
+    const d = document.createElement("div");
+    d.className = "chip";
+    d.textContent = s;
+    el.appendChild(d);
+  });
+  document.getElementById("count").textContent = serials.size;
+}
+
+function startScanner() {
+  if (scanning) return;
+
+  Quagga.init({
+    inputStream: {
+      type: "LiveStream",
+      target: document.querySelector('#interactive'),
+      constraints: {
+        facingMode: "environment",
+        width: 1280,
+        height: 720
+      }
+    },
+    locator: {
+      patchSize: "medium",
+      halfSample: true
+    },
+    numOfWorkers: 2,
+    decoder: {
+      readers: [
+        "code_128_reader",
+        "ean_reader",
+        "ean_8_reader",
+        "code_39_reader"
+      ]
+    },
+    locate: true
+  }, function(err) {
+    if (err) {
+      alert("Virhe: " + err);
+      return;
+    }
+    Quagga.start();
+    scanning = true;
+  });
+
+  Quagga.onDetected(data => {
+    if (!scanning) return;
+
+    const code = data.codeResult.code;
+    const now = Date.now();
+
+    if (code === lastScan && now - lastTime < 1500) return;
+
+    lastScan = code;
+    lastTime = now;
+
+    if (!serials.has(code)) {
+      serials.add(code);
+      render();
+      if (navigator.vibrate) navigator.vibrate(50);
+    }
+  });
+}
+
+function stopScanner() {
+  scanning = false;
+  Quagga.stop();
+}
+
+function submit() {
+  alert("Lähetetään:\n\n" + Array.from(serials).join("\n"));
+}
+</script></body>
+</html>

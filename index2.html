@@ -873,7 +873,19 @@ var CFG = {
   }
 };
 
-var READERS = ['code_128_reader'];
+// Tuetut viivakoodiformaatit — Code128 ensisijaisena, muut varmuuden vuoksi
+var READERS = [
+  'code_128_reader',    // yleisin sähkömittareissa
+  'code_39_reader',     // vanhemmat mittarit
+  'code_39_vin_reader',
+  'ean_reader',         // EAN-13
+  'ean_8_reader',
+  'upc_reader',
+  'upc_e_reader',
+  'codabar_reader',
+  'i2of5_reader',       // Interleaved 2 of 5
+  '2of5_reader',
+];
 
 // NAV
 window.showScreen = function(id) {
@@ -983,10 +995,24 @@ function startLiveScan() {
     inputStream:{
       name:'Live', type:'LiveStream',
       target: document.getElementById('quagga-container'),
-      constraints:{ facingMode:'environment', width:{ideal:1280}, height:{ideal:720} }
+      constraints:{
+        facingMode:'environment',
+        width:{ min:640, ideal:1280, max:1920 },
+        height:{ min:480, ideal:720, max:1080 }
+      }
     },
-    decoder:{ readers:READERS, multiple:false },
-    locate:true, frequency:10
+    decoder:{
+      readers: READERS,
+      multiple: false,
+      debug:{ drawBoundingBox:false, showFrequency:false, drawScanline:false, showPattern:false }
+    },
+    locator:{
+      patchSize: 'medium',
+      halfSample: true
+    },
+    locate: true,
+    frequency: 5,
+    numOfWorkers: 0
   }, function(err){
     document.getElementById('scan-processing').classList.remove('show');
     if (err) {
@@ -1038,9 +1064,11 @@ window.handleFileCapture = function(event) {
   document.getElementById('scan-processing-txt').textContent='Luetaan viivakoodia\u2026';
   var url = URL.createObjectURL(file);
   Quagga.decodeSingle({
-    src:url, numOfWorkers:0, locate:true,
-    decoder:{ readers:READERS },
-    locator:{ patchSize:'medium', halfSample:true }
+    src: url,
+    numOfWorkers: 0,
+    locate: true,
+    decoder:{ readers: READERS },
+    locator:{ patchSize: 'large', halfSample: false }
   }, function(result){
     URL.revokeObjectURL(url);
     document.getElementById('scan-processing').classList.remove('show');
@@ -1108,9 +1136,11 @@ window.captureFrame = function() {
   canvas.getContext('2d').drawImage(video,0,0,canvas.width,canvas.height);
   var dataUrl = canvas.toDataURL('image/jpeg',0.92);
   Quagga.decodeSingle({
-    src:dataUrl, numOfWorkers:0, locate:true,
-    decoder:{ readers:READERS },
-    locator:{ patchSize:'medium', halfSample:false }
+    src: dataUrl,
+    numOfWorkers: 0,
+    locate: true,
+    decoder:{ readers: READERS },
+    locator:{ patchSize: 'large', halfSample: false }
   }, function(result){
     if (result&&result.codeResult&&result.codeResult.code) {
       var code  = result.codeResult.code.trim();

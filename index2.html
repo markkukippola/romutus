@@ -839,380 +839,370 @@ input[type="file"]#cam-file-input { display: none; }
 <div class="toast" id="toast"></div>
 
 <script>
-// ══ STATE ══
-let currentUser = null;
-let currentAction = null;
-let serialSet = new Set();
-let quaggaRunning = false;
-let lastScanned = '', lastScannedAt = 0;
+// All functions attached to window so onclick= attributes work
+// regardless of how Quagga2 module affects script scope.
 
-const CFG = {
+var currentUser   = null;
+var currentAction = null;
+var serialSet     = new Set();
+var quaggaRunning = false;
+var lastScanned   = '';
+var lastScannedAt = 0;
+var psStream      = null;
+var psActive      = false;
+var toastTimer    = null;
+
+var CFG = {
   romutus: {
     label:'Romutus', badgeCls:'badge-romutus', submitCls:'romutus',
-    icon:'🗑️', submitLabel:'Romuta mittarit',
+    icon:'\uD83D\uDDD1\uFE0F', submitLabel:'Romuta mittarit',
     successTitle:'Romutus kirjattu!',
-    successSub:'Mittarit on kirjattu romutukseen. Tiedot on välitetty järjestelmään.',
+    successSub:'Mittarit on kirjattu romutukseen. Tiedot on v\u00e4litetty j\u00e4rjestelm\u00e4\u00e4n.'
   },
   huolto: {
     label:'Huolto', badgeCls:'badge-huolto', submitCls:'huolto',
-    icon:'🔧', submitLabel:'Lähetä huoltoon',
-    successTitle:'Huoltolähetys kirjattu!',
-    successSub:'Mittareiden huoltolähetys on kirjattu järjestelmään.',
+    icon:'\uD83D\uDD27', submitLabel:'L\u00e4het\u00e4 huoltoon',
+    successTitle:'Huoltol\u00e4hetys kirjattu!',
+    successSub:'Mittareiden huoltol\u00e4hetys on kirjattu j\u00e4rjestelm\u00e4\u00e4n.'
   },
   varasto: {
     label:'Varasto', badgeCls:'badge-varasto', submitCls:'varasto',
-    icon:'📦', submitLabel:'Vie varastoon',
+    icon:'\uD83D\uDCE6', submitLabel:'Vie varastoon',
     successTitle:'Varastokirjaus tehty!',
-    successSub:'Mittarit on kirjattu varastoon uudelleenkäyttöä varten.',
-  },
+    successSub:'Mittarit on kirjattu varastoon uudelleenk\u00e4ytt\u00f6\u00e4 varten.'
+  }
 };
 
-// Vain Code128 — sähkömittarien sarjanumeroille
-const READERS = ['code_128_reader'];
+var READERS = ['code_128_reader'];
 
-// ══ NAV ══
-function showScreen(id) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.getElementById('screen-' + id).classList.add('active');
-  document.getElementById('topbar').style.display = id === 'login' ? 'none' : 'flex';
+// NAV
+window.showScreen = function(id) {
+  document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('active'); });
+  document.getElementById('screen-'+id).classList.add('active');
+  document.getElementById('topbar').style.display = (id==='login') ? 'none' : 'flex';
   if (id !== 'form') { stopLiveScan(); stopPointShoot(); }
-}
+};
 
-// ══ LOGIN ══
-function doLogin() {
-  showLoading('Kirjaudutaan sisään…');
-  setTimeout(() => {
-    currentUser = { name: 'Antti Jokinen', initials: 'AJ' };
+// LOGIN
+window.doLogin = function() {
+  showLoading('Kirjaudutaan sis\u00e4\u00e4n\u2026');
+  setTimeout(function() {
+    currentUser = { name:'Antti Jokinen', initials:'AJ' };
     document.getElementById('user-avatar').textContent = 'AJ';
-    document.getElementById('user-name').textContent = 'A. Jokinen';
+    document.getElementById('user-name').textContent   = 'A. Jokinen';
     hideLoading();
-    showScreen('select');
-    toast('Kirjauduttu sisään ✓', 'ok');
+    window.showScreen('select');
+    showToast('Kirjauduttu sis\u00e4\u00e4n \u2713','ok');
   }, 1300);
-}
-function logout() {
+};
+
+window.logout = function() {
   stopLiveScan(); stopPointShoot();
   currentUser = null; currentAction = null; serialSet.clear();
-  showScreen('login');
-}
+  window.showScreen('login');
+};
 
-// ══ SELECT ══
-function selectAction(action) {
+// SELECT
+window.selectAction = function(action) {
   currentAction = action;
-  const c = CFG[action];
-
+  var c = CFG[action];
   document.getElementById('form-page-title').textContent = c.label;
-  const badge = document.getElementById('form-badge');
-  badge.textContent = c.icon + '  ' + c.label;
-  badge.className = 'form-badge ' + c.badgeCls;
+  var badge = document.getElementById('form-badge');
+  badge.textContent = c.icon+'  '+c.label;
+  badge.className   = 'form-badge '+c.badgeCls;
   document.getElementById('form-title-text').textContent = 'Sarjanumerot';
-
-  const btn = document.getElementById('submit-btn');
-  btn.className = 'submit-btn ' + c.submitCls;
-  document.getElementById('submit-icon').textContent = c.icon;
+  var btn = document.getElementById('submit-btn');
+  btn.className = 'submit-btn '+c.submitCls;
+  document.getElementById('submit-icon').textContent  = c.icon;
   document.getElementById('submit-label').textContent = c.submitLabel;
-
   serialSet.clear();
   document.getElementById('manual-input').value = '';
-  document.getElementById('notes-input').value = '';
+  document.getElementById('notes-input').value  = '';
   clearScanFeedback();
   renderChips();
-  updateBtn();
-  showScreen('form');
-}
+  updateSubmitBtn();
+  window.showScreen('form');
+};
 
-function goBack() { stopLiveScan(); showScreen('select'); }
+window.goBack = function() { stopLiveScan(); window.showScreen('select'); };
 
-// ══ SERIALS ══
+// SERIALS
 function addSerial(raw) {
-  const val = raw.trim();
+  var val = raw.trim();
   if (!val || val.length < 4) return false;
-  if (serialSet.has(val)) { toast('Jo listalla: ' + val, 'err'); return false; }
-  serialSet.add(val); renderChips(); updateBtn();
+  if (serialSet.has(val)) { showToast('Jo listalla: '+val,'err'); return false; }
+  serialSet.add(val); renderChips(); updateSubmitBtn();
   return true;
 }
-function removeSerial(s) { serialSet.delete(s); renderChips(); updateBtn(); }
+
+window.removeSerial = function(s) { serialSet.delete(s); renderChips(); updateSubmitBtn(); };
+
 function renderChips() {
-  const wrap = document.getElementById('chips-wrap');
-  const empty = document.getElementById('chips-empty');
+  var wrap  = document.getElementById('chips-wrap');
+  var empty = document.getElementById('chips-empty');
   document.getElementById('serial-count').textContent = serialSet.size;
   if (serialSet.size === 0) {
-    wrap.style.display = 'none'; empty.style.display = 'block'; return;
+    wrap.style.display='none'; empty.style.display='block'; return;
   }
-  empty.style.display = 'none'; wrap.style.display = 'flex';
+  empty.style.display='none'; wrap.style.display='flex';
   wrap.innerHTML = '';
-  serialSet.forEach(s => {
-    const d = document.createElement('div');
+  serialSet.forEach(function(s){
+    var d = document.createElement('div');
     d.className = 'chip';
-    d.innerHTML = s + '<button class="chip-x" onclick="removeSerial(\'' + s + '\')">×</button>';
+    d.innerHTML = s+'<button class="chip-x" onclick="removeSerial(\''+s+'\')">\u00d7</button>';
     wrap.appendChild(d);
   });
 }
-function updateBtn() { document.getElementById('submit-btn').disabled = serialSet.size === 0; }
-function addManual() {
-  const inp = document.getElementById('manual-input');
-  if (addSerial(inp.value)) { inp.value = ''; inp.focus(); }
-}
-function manualKeydown(e) { if (e.key === 'Enter') { e.preventDefault(); addManual(); } }
 
-// ══ QUAGGA2 LIVE SCAN ══
-function toggleLiveScan() { quaggaRunning ? stopLiveScan() : startLiveScan(); }
+function updateSubmitBtn() {
+  document.getElementById('submit-btn').disabled = (serialSet.size === 0);
+}
+
+window.addManual = function() {
+  var inp = document.getElementById('manual-input');
+  if (addSerial(inp.value)) { inp.value=''; inp.focus(); }
+};
+
+window.manualKeydown = function(e) {
+  if (e.key==='Enter') { e.preventDefault(); window.addManual(); }
+};
+
+// LIVE SCAN
+window.toggleLiveScan = function() { quaggaRunning ? stopLiveScan() : startLiveScan(); };
 
 function startLiveScan() {
   clearScanFeedback();
-  document.getElementById('cam-viewport').style.display = 'block';
+  document.getElementById('cam-viewport').style.display='block';
   document.getElementById('scan-processing').classList.add('show');
-  document.getElementById('scan-processing-txt').textContent = 'Avataan kamera…';
-  document.getElementById('scan-btn-icon').textContent = '⏹';
-  document.getElementById('scan-btn-label').textContent = 'Lopeta skannaus';
+  document.getElementById('scan-processing-txt').textContent='Avataan kamera\u2026';
+  document.getElementById('scan-btn-icon').textContent ='\u23f9';
+  document.getElementById('scan-btn-label').textContent='Lopeta skannaus';
   document.getElementById('scan-toggle-btn').classList.add('active');
 
   Quagga.init({
-    inputStream: {
-      name: 'Live', type: 'LiveStream',
+    inputStream:{
+      name:'Live', type:'LiveStream',
       target: document.getElementById('quagga-container'),
-      constraints: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+      constraints:{ facingMode:'environment', width:{ideal:1280}, height:{ideal:720} }
     },
-    decoder: { readers: READERS, multiple: false },
-    locate: true,
-    frequency: 10,
-  }, function(err) {
+    decoder:{ readers:READERS, multiple:false },
+    locate:true, frequency:10
+  }, function(err){
     document.getElementById('scan-processing').classList.remove('show');
     if (err) {
-      document.getElementById('cam-viewport').style.display = 'none';
-      document.getElementById('scan-btn-icon').textContent = '📷';
-      document.getElementById('scan-btn-label').textContent = 'Skannaa kameralla';
+      document.getElementById('cam-viewport').style.display='none';
+      document.getElementById('scan-btn-icon').textContent ='\uD83D\uDCF7';
+      document.getElementById('scan-btn-label').textContent='Skannaa kameralla';
       document.getElementById('scan-toggle-btn').classList.remove('active');
       quaggaRunning = false;
-      let msg = 'Kameran avaaminen epäonnistui.';
-      if (err.name === 'NotAllowedError' || (err.message && err.message.includes('Permission')))
-        msg = 'Kameran käyttöoikeus evätty. Anna lupa selaimen asetuksissa ja lataa sivu uudelleen.';
-      else if (err.name === 'NotFoundError')
-        msg = 'Kameraa ei löydy. Kokeile alla olevaa kuvanvalintaa.';
+      var msg = 'Kameran avaaminen ep\u00e4onnistui.';
+      if (err.name==='NotAllowedError' || (err.message && err.message.indexOf('Permission')!==-1))
+        msg = 'Kameran k\u00e4ytt\u00f6oikeus ev\u00e4tty. Anna lupa selaimen asetuksissa.';
+      else if (err.name==='NotFoundError')
+        msg = 'Kameraa ei l\u00f6ydy. Kokeile kuvanvalintaa.';
       showScanError(msg);
-      document.getElementById('fallback-row').style.display = 'block';
+      document.getElementById('fallback-row').style.display='block';
       return;
     }
     Quagga.start();
     quaggaRunning = true;
-
-    Quagga.onDetected(function(result) {
-      if (!result || !result.codeResult || !result.codeResult.code) return;
-      const code = result.codeResult.code;
-      const now = Date.now();
-      if (code === lastScanned && (now - lastScannedAt) < 2500) return;
-      lastScanned = code; lastScannedAt = now;
+    Quagga.onDetected(function(result){
+      if (!result||!result.codeResult||!result.codeResult.code) return;
+      var code = result.codeResult.code;
+      var now  = Date.now();
+      if (code===lastScanned && (now-lastScannedAt)<2500) return;
+      lastScanned=code; lastScannedAt=now;
       onBarcodeFound(code);
     });
   });
 }
 
 function stopLiveScan() {
-  if (quaggaRunning) { try { Quagga.stop(); } catch(e){} quaggaRunning = false; }
-  document.getElementById('cam-viewport').style.display = 'none';
-  const btn = document.getElementById('scan-toggle-btn');
+  if (quaggaRunning) { try { Quagga.stop(); } catch(e){} quaggaRunning=false; }
+  document.getElementById('cam-viewport').style.display='none';
+  var btn=document.getElementById('scan-toggle-btn');
   if (btn) {
     btn.classList.remove('active');
-    document.getElementById('scan-btn-icon').textContent = '📷';
-    document.getElementById('scan-btn-label').textContent = 'Skannaa kameralla';
+    document.getElementById('scan-btn-icon').textContent ='\uD83D\uDCF7';
+    document.getElementById('scan-btn-label').textContent='Skannaa kameralla';
   }
-  lastScanned = '';
+  lastScanned='';
 }
 
-// ══ FALLBACK FILE ══
-function handleFileCapture(event) {
-  const file = event.target.files && event.target.files[0];
+// FALLBACK FILE
+window.handleFileCapture = function(event) {
+  var file = event.target.files && event.target.files[0];
   if (!file) return;
   clearScanFeedback();
   document.getElementById('scan-processing').classList.add('show');
-  document.getElementById('scan-processing-txt').textContent = 'Luetaan viivakoodia…';
-  const url = URL.createObjectURL(file);
+  document.getElementById('scan-processing-txt').textContent='Luetaan viivakoodia\u2026';
+  var url = URL.createObjectURL(file);
   Quagga.decodeSingle({
-    src: url, numOfWorkers: 0, locate: true,
-    decoder: { readers: READERS },
-    locator: { patchSize: 'medium', halfSample: true },
-  }, function(result) {
+    src:url, numOfWorkers:0, locate:true,
+    decoder:{ readers:READERS },
+    locator:{ patchSize:'medium', halfSample:true }
+  }, function(result){
     URL.revokeObjectURL(url);
     document.getElementById('scan-processing').classList.remove('show');
-    if (result && result.codeResult && result.codeResult.code) {
+    if (result&&result.codeResult&&result.codeResult.code) {
       onBarcodeFound(result.codeResult.code);
     } else {
-      showScanResult('err', '⚠ Viivakoodia ei tunnistettu. Ota selkeämpi kuva lähempää.');
+      showScanResult('err','\u26a0 Viivakoodia ei tunnistettu. Ota selke\u00e4mp\u00e4 kuva l\u00e4hemp\u00e4\u00e4.');
       if (navigator.vibrate) navigator.vibrate([40,30,40]);
     }
   });
-}
+};
 
-// ══ POINT & SHOOT ══
-let psStream = null;
-let psActive = false;
+// POINT & SHOOT
+window.togglePointShoot = function() { psActive ? stopPointShoot() : startPointShoot(); };
 
-function togglePointShoot() {
-  psActive ? stopPointShoot() : startPointShoot();
-}
-
-async function startPointShoot() {
-  const btn = document.getElementById('ps-open-btn');
-  const capBtn = document.getElementById('ps-capture-btn');
-  const preview = document.getElementById('ps-preview-wrap');
-  setPsResult('', '');
-
-  try {
-    psStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
-    });
-    const video = document.getElementById('ps-video');
-    video.srcObject = psStream;
-    await video.play();
-
-    preview.classList.add('open');
-    capBtn.disabled = false;
-    btn.classList.add('active');
-    document.getElementById('ps-open-icon').textContent = '⏹';
-    document.getElementById('ps-open-label').textContent = 'Sulje kamera';
-    psActive = true;
-  } catch(err) {
-    let msg = 'Kameran avaaminen epäonnistui.';
-    if (err.name === 'NotAllowedError') msg = 'Kameran käyttöoikeus evätty.';
-    else if (err.name === 'NotFoundError') msg = 'Kameraa ei löydy.';
-    setPsResult('err', '⚠ ' + msg);
+function startPointShoot() {
+  setPsResult('','');
+  if (!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia) {
+    setPsResult('err','\u26a0 Kamera ei ole tuettu t\u00e4ll\u00e4 selaimella.'); return;
   }
-}
-
-function stopPointShoot() {
-  if (psStream) { psStream.getTracks().forEach(t => t.stop()); psStream = null; }
-  const video = document.getElementById('ps-video');
-  if (video) video.srcObject = null;
-  document.getElementById('ps-preview-wrap').classList.remove('open');
-  document.getElementById('ps-capture-btn').disabled = true;
-  document.getElementById('ps-open-btn').classList.remove('active');
-  document.getElementById('ps-open-icon').textContent = '🎯';
-  document.getElementById('ps-open-label').textContent = 'Avaa point & shoot';
-  psActive = false;
-}
-
-function captureFrame() {
-  const video = document.getElementById('ps-video');
-  if (!video || !psStream) return;
-
-  // Flash feedback
-  const flash = document.getElementById('ps-flash');
-  flash.style.opacity = '0.5';
-  setTimeout(() => { flash.style.opacity = '0'; }, 100);
-  if (navigator.vibrate) navigator.vibrate(30);
-
-  setPsResult('processing', '↻ Luetaan…');
-
-  // Draw current frame to hidden canvas
-  const canvas = document.getElementById('ps-canvas');
-  canvas.width  = video.videoWidth  || 1280;
-  canvas.height = video.videoHeight || 720;
-  canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-
-  // Feed the data URL to Quagga.decodeSingle
-  const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
-
-  Quagga.decodeSingle({
-    src: dataUrl,
-    numOfWorkers: 0,
-    locate: true,
-    decoder: { readers: READERS },
-    locator: { patchSize: 'medium', halfSample: false },
-  }, function(result) {
-    if (result && result.codeResult && result.codeResult.code) {
-      const code = result.codeResult.code.trim();
-      const added = addSerial(code);
-      if (added) {
-        setPsResult('ok', '✓ Luettu: ' + code);
-        toast('✓ ' + code, 'ok');
-        if (navigator.vibrate) navigator.vibrate(80);
-      } else {
-        setPsResult('err', 'Jo listalla: ' + code);
-      }
-    } else {
-      setPsResult('err', '⚠ Ei tunnistettu. Kohdista viivakoodi täsmällisesti kehykseen ja yritä uudelleen.');
-      if (navigator.vibrate) navigator.vibrate([30,20,30]);
-    }
+  navigator.mediaDevices.getUserMedia({
+    video:{ facingMode:'environment', width:{ideal:1280}, height:{ideal:720} }
+  }).then(function(stream){
+    psStream = stream;
+    var video = document.getElementById('ps-video');
+    video.srcObject = stream;
+    video.play();
+    document.getElementById('ps-preview-wrap').classList.add('open');
+    document.getElementById('ps-capture-btn').disabled = false;
+    document.getElementById('ps-open-btn').classList.add('active');
+    document.getElementById('ps-open-icon').textContent ='\u23f9';
+    document.getElementById('ps-open-label').textContent='Sulje kamera';
+    psActive = true;
+  }).catch(function(err){
+    var msg='Kameran avaaminen ep\u00e4onnistui.';
+    if (err.name==='NotAllowedError') msg='Kameran k\u00e4ytt\u00f6oikeus ev\u00e4tty.';
+    else if (err.name==='NotFoundError') msg='Kameraa ei l\u00f6ydy.';
+    setPsResult('err','\u26a0 '+msg);
   });
 }
 
-function setPsResult(type, msg) {
-  const el = document.getElementById('ps-result');
-  el.textContent = msg;
-  el.className = type ? 'ps-result ' + type : 'ps-result';
+function stopPointShoot() {
+  if (psStream) { psStream.getTracks().forEach(function(t){ t.stop(); }); psStream=null; }
+  var video = document.getElementById('ps-video');
+  if (video) video.srcObject=null;
+  document.getElementById('ps-preview-wrap').classList.remove('open');
+  document.getElementById('ps-capture-btn').disabled=true;
+  document.getElementById('ps-open-btn').classList.remove('active');
+  document.getElementById('ps-open-icon').textContent ='\uD83C\uDFAF';
+  document.getElementById('ps-open-label').textContent='Avaa point & shoot';
+  psActive=false;
 }
 
+window.captureFrame = function() {
+  var video = document.getElementById('ps-video');
+  if (!video||!psStream) return;
+  var flash = document.getElementById('ps-flash');
+  flash.style.opacity='0.5';
+  setTimeout(function(){ flash.style.opacity='0'; },100);
+  if (navigator.vibrate) navigator.vibrate(30);
+  setPsResult('processing','\u21bb Luetaan\u2026');
+  var canvas = document.getElementById('ps-canvas');
+  canvas.width =video.videoWidth ||1280;
+  canvas.height=video.videoHeight||720;
+  canvas.getContext('2d').drawImage(video,0,0,canvas.width,canvas.height);
+  var dataUrl = canvas.toDataURL('image/jpeg',0.92);
+  Quagga.decodeSingle({
+    src:dataUrl, numOfWorkers:0, locate:true,
+    decoder:{ readers:READERS },
+    locator:{ patchSize:'medium', halfSample:false }
+  }, function(result){
+    if (result&&result.codeResult&&result.codeResult.code) {
+      var code  = result.codeResult.code.trim();
+      var added = addSerial(code);
+      if (added) {
+        setPsResult('ok','\u2713 Luettu: '+code);
+        showToast('\u2713 '+code,'ok');
+        if (navigator.vibrate) navigator.vibrate(80);
+      } else {
+        setPsResult('err','Jo listalla: '+code);
+      }
+    } else {
+      setPsResult('err','\u26a0 Ei tunnistettu. Kohdista viivakoodi kehykseen ja yrit\u00e4 uudelleen.');
+      if (navigator.vibrate) navigator.vibrate([30,20,30]);
+    }
+  });
+};
 
-  const cleaned = text.trim();
-  if (!cleaned || cleaned.length < 4) {
-    showScanResult('err', '⚠ Liian lyhyt arvo: "' + text + '"'); return;
-  }
-  const f = document.getElementById('cam-flash');
-  if (f) { f.style.opacity = '0.28'; setTimeout(() => { f.style.opacity = '0'; }, 150); }
-  const added = addSerial(cleaned);
+function setPsResult(type,msg) {
+  var el=document.getElementById('ps-result');
+  el.textContent=msg; el.className=type?('ps-result '+type):'ps-result';
+}
+
+function onBarcodeFound(text) {
+  var cleaned=text.trim();
+  if (!cleaned||cleaned.length<4) { showScanResult('err','\u26a0 Liian lyhyt arvo: "'+text+'"'); return; }
+  var f=document.getElementById('cam-flash');
+  if (f) { f.style.opacity='0.28'; setTimeout(function(){ f.style.opacity='0'; },150); }
+  var added=addSerial(cleaned);
   if (added) {
-    showScanResult('ok', '✓ Luettu: ' + cleaned);
-    toast('✓ ' + cleaned, 'ok');
+    showScanResult('ok','\u2713 Luettu: '+cleaned);
+    showToast('\u2713 '+cleaned,'ok');
     if (navigator.vibrate) navigator.vibrate(70);
   }
 }
 
 function clearScanFeedback() {
   document.getElementById('scan-processing').classList.remove('show');
-  document.getElementById('scan-result').className = 'scan-result';
-  document.getElementById('scan-result').textContent = '';
+  var sr=document.getElementById('scan-result'); sr.className='scan-result'; sr.textContent='';
   document.getElementById('scan-error').classList.remove('show');
-  document.getElementById('fallback-row').style.display = 'none';
+  document.getElementById('fallback-row').style.display='none';
 }
-function showScanResult(type, msg) {
-  const el = document.getElementById('scan-result');
-  el.textContent = msg; el.className = 'scan-result ' + type;
+function showScanResult(type,msg) {
+  var el=document.getElementById('scan-result'); el.textContent=msg; el.className='scan-result '+type;
 }
 function showScanError(msg) {
-  const el = document.getElementById('scan-error');
-  el.textContent = '⚠ ' + msg; el.classList.add('show');
+  var el=document.getElementById('scan-error'); el.textContent='\u26a0 '+msg; el.classList.add('show');
 }
 
-// ══ SUBMIT ══
-function submitForm() {
-  if (serialSet.size === 0) return;
+// SUBMIT
+window.submitForm = function() {
+  if (serialSet.size===0) return;
   stopLiveScan(); stopPointShoot();
-  const c = CFG[currentAction];
-  showLoading('Lähetetään ' + serialSet.size + ' mittaria…');
-  setTimeout(() => {
+  var c=CFG[currentAction];
+  showLoading('L\u00e4hetet\u00e4\u00e4n '+serialSet.size+' mittaria\u2026');
+  setTimeout(function(){
     hideLoading();
-    const circ = document.getElementById('success-circle');
-    circ.textContent = c.icon; circ.className = 'success-circle ' + currentAction;
-    document.getElementById('success-title').textContent = c.successTitle;
-    document.getElementById('success-sub').textContent = c.successSub;
-    const now = new Date();
-    const ts = now.toLocaleDateString('fi-FI') + ' '
-             + now.toLocaleTimeString('fi-FI', {hour:'2-digit', minute:'2-digit'});
-    const ref = 'REF-' + Math.floor(Math.random()*90000+10000);
-    document.getElementById('success-meta').innerHTML =
-      '<div class="meta-row"><span class="meta-k">Asentaja</span><span class="meta-v">' + currentUser.name + '</span></div>' +
-      '<div class="meta-row"><span class="meta-k">Toiminto</span><span class="meta-v">' + c.label + '</span></div>' +
-      '<div class="meta-row"><span class="meta-k">Mittareita</span><span class="meta-v">' + serialSet.size + ' kpl</span></div>' +
-      '<div class="meta-row"><span class="meta-k">Aikaleima</span><span class="meta-v">' + ts + '</span></div>' +
-      '<div class="meta-row"><span class="meta-k">Viite</span><span class="meta-v">' + ref + '</span></div>';
-    showScreen('success');
-  }, 1400);
-}
-function newAction() { serialSet.clear(); showScreen('select'); }
+    var circ=document.getElementById('success-circle');
+    circ.textContent=c.icon; circ.className='success-circle '+currentAction;
+    document.getElementById('success-title').textContent=c.successTitle;
+    document.getElementById('success-sub').textContent  =c.successSub;
+    var now=new Date();
+    var ts=now.toLocaleDateString('fi-FI')+' '+now.toLocaleTimeString('fi-FI',{hour:'2-digit',minute:'2-digit'});
+    var ref='REF-'+Math.floor(Math.random()*90000+10000);
+    document.getElementById('success-meta').innerHTML=
+      '<div class="meta-row"><span class="meta-k">Asentaja</span><span class="meta-v">'+currentUser.name+'</span></div>'+
+      '<div class="meta-row"><span class="meta-k">Toiminto</span><span class="meta-v">'+c.label+'</span></div>'+
+      '<div class="meta-row"><span class="meta-k">Mittareita</span><span class="meta-v">'+serialSet.size+' kpl</span></div>'+
+      '<div class="meta-row"><span class="meta-k">Aikaleima</span><span class="meta-v">'+ts+'</span></div>'+
+      '<div class="meta-row"><span class="meta-k">Viite</span><span class="meta-v">'+ref+'</span></div>';
+    window.showScreen('success');
+  },1400);
+};
 
-// ══ HELPERS ══
+window.newAction = function() { serialSet.clear(); window.showScreen('select'); };
+
 function showLoading(msg) {
-  document.getElementById('loading-txt').textContent = msg;
+  document.getElementById('loading-txt').textContent=msg;
   document.getElementById('loading-overlay').classList.add('on');
 }
 function hideLoading() { document.getElementById('loading-overlay').classList.remove('on'); }
-let toastT;
-function toast(msg, type) {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.className = 'toast show' + (type ? ' ' + type : '');
-  clearTimeout(toastT); toastT = setTimeout(() => t.className = 'toast', 2800);
+
+function showToast(msg,type) {
+  var t=document.getElementById('toast');
+  t.textContent=msg; t.className='toast show'+(type?' '+type:'');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(function(){ t.className='toast'; },2800);
 }
-document.addEventListener('visibilitychange', () => { if (document.hidden) { stopLiveScan(); stopPointShoot(); } });
+
+document.addEventListener('visibilitychange',function(){
+  if (document.hidden) { stopLiveScan(); stopPointShoot(); }
+});
 </script>
 </body>
 </html>

@@ -5,354 +5,651 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>Mittarihallinta</title>
-<!-- Quagga2: 1D-viivakoodien lukija (Code128, EAN, Code39 jne.) -->
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>Mittarihallinta – Vantaan Energia Sähköverkot</title>
 <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.4.0/dist/quagga.min.js"></script>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;500;600;700&family=Source+Code+Pro:wght@400;500&display=swap');
 
+/* ── VES BRAND TOKENS ── */
 :root {
-  --bg: #0f1117;
-  --surface: #1a1d27;
-  --surface2: #242736;
-  --border: #2e3347;
-  --blue: #3b82f6;
-  --red: #ef4444;
-  --amber: #f59e0b;
-  --green: #22c55e;
-  --text: #e2e8f0;
-  --muted: #64748b;
-  --dim: #94a3b8;
-  --mono: 'IBM Plex Mono', monospace;
-  --sans: 'IBM Plex Sans', sans-serif;
-  --safe-top: env(safe-area-inset-top, 0px);
+  /* VES brand colours */
+  --ves-navy:    #002D6E;   /* primary dark blue */
+  --ves-blue:    #0055B8;   /* medium blue */
+  --ves-light:   #E8F0FA;   /* tinted bg */
+  --ves-accent:  #00AEEF;   /* cyan accent / highlight */
+  --ves-white:   #FFFFFF;
+  --ves-line:    #D0DCF0;   /* border */
+  --ves-text:    #1A1A2E;   /* body text */
+  --ves-muted:   #5B6F8C;   /* secondary text */
+  --ves-dim:     #8899BB;
+  /* status */
+  --red:    #C8002D;
+  --amber:  #E07B00;
+  --green:  #1A7F45;
+  --red-bg:   #FFF0F2;
+  --amber-bg: #FFF8EC;
+  --green-bg: #EDF7F2;
+  /* layout */
+  --sans: 'Source Sans 3', 'Helvetica Neue', Arial, sans-serif;
+  --mono: 'Source Code Pro', monospace;
+  --safe-top:    env(safe-area-inset-top,    0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --tap: 54px;
+  --tap: 52px;
+  --radius: 6px;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; overflow: hidden; }
 body {
-  background: var(--bg); color: var(--text);
+  background: var(--ves-light);
+  color: var(--ves-text);
   font-family: var(--sans);
   display: flex; flex-direction: column;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
+  font-size: 15px;
 }
 
 .screen { display: none; flex: 1; flex-direction: column; overflow: hidden; }
 .screen.active { display: flex; }
 
-/* ── TOPBAR ── */
+@keyframes fadeUp { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
+@keyframes blink  { 0%,100%{opacity:1} 50%{opacity:0.3} }
+@keyframes spin   { to{transform:rotate(360deg)} }
+@keyframes chipIn { from{opacity:0;transform:scale(0.85)} to{opacity:1;transform:scale(1)} }
+@keyframes scanline {
+  0%  {top:2px;opacity:0} 8%{opacity:1} 92%{opacity:1} 100%{top:calc(100% - 2px);opacity:0}
+}
+
+/* ══════════════════════════════════════
+   TOPBAR
+══════════════════════════════════════ */
 .topbar {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 0 16px; padding-top: var(--safe-top);
-  height: calc(52px + var(--safe-top));
-  background: var(--surface); border-bottom: 1px solid var(--border);
+  padding: 0 16px;
+  padding-top: var(--safe-top);
+  height: calc(56px + var(--safe-top));
+  background: var(--ves-navy);
   flex-shrink: 0; z-index: 50;
 }
-.topbar-brand { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; }
-.topbar-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--blue); box-shadow: 0 0 7px var(--blue); animation: blink 2s ease-in-out infinite; }
-@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.35} }
-.topbar-right { display: flex; align-items: center; gap: 8px; }
-.avatar { width: 32px; height: 32px; border-radius: 8px; background: var(--blue); display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 11px; font-weight: 600; }
-.logout-btn { height: 32px; padding: 0 12px; border: 1px solid var(--border); border-radius: 7px; background: transparent; color: var(--muted); font-size: 12px; font-family: var(--sans); cursor: pointer; }
-.logout-btn:active { border-color: var(--red); color: var(--red); }
+.topbar-logo {
+  display: flex; align-items: center; gap: 10px;
+}
+/* SVG logo inline placeholder — replaced by actual SVG */
+.ves-logo-svg {
+  height: 28px; width: auto;
+  filter: brightness(0) invert(1); /* make it white */
+}
+.topbar-right { display: flex; align-items: center; gap: 10px; }
+.avatar {
+  width: 32px; height: 32px; border-radius: 4px;
+  background: var(--ves-accent);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 11px; font-weight: 500;
+  color: var(--ves-navy);
+}
+.topbar-username { font-size: 13px; color: rgba(255,255,255,0.75); }
+.logout-btn {
+  height: 30px; padding: 0 12px;
+  border: 1px solid rgba(255,255,255,0.25); border-radius: 4px;
+  background: transparent; color: rgba(255,255,255,0.7);
+  font-size: 12px; font-family: var(--sans); cursor: pointer;
+  transition: all 0.15s;
+}
+.logout-btn:active { background: rgba(255,255,255,0.1); color: #fff; }
 
-/* ── LOGIN ── */
-#screen-login { align-items: center; justify-content: center; background: radial-gradient(ellipse at 30% 40%, #1a2540 0%, var(--bg) 65%); padding: 24px; }
-.login-card { width: 100%; max-width: 360px; padding: 40px 28px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; text-align: center; animation: fadeUp 0.4s ease both; }
-@keyframes fadeUp { from{opacity:0;transform:translateY(18px)} to{opacity:1;transform:translateY(0)} }
-.login-logo { width: 60px; height: 60px; margin: 0 auto 18px; background: linear-gradient(135deg,#1d4ed8,#3b82f6); border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 28px; }
-.login-title { font-size: 22px; font-weight: 600; margin-bottom: 6px; }
-.login-sub { font-size: 13px; color: var(--muted); line-height: 1.6; margin-bottom: 28px; }
-.ms-btn { width: 100%; height: var(--tap); border: 1px solid #2563eb; border-radius: 10px; background: linear-gradient(135deg,#1e40af,#2563eb); color: #fff; font-size: 15px; font-weight: 500; font-family: var(--sans); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; }
-.ms-btn:active { opacity: 0.85; transform: scale(0.98); }
+/* ══════════════════════════════════════
+   PAGE TITLES (below topbar)
+══════════════════════════════════════ */
+.page-header {
+  background: var(--ves-navy);
+  padding: 0 16px 18px;
+  flex-shrink: 0;
+}
+.page-header h1 {
+  font-size: 19px; font-weight: 600;
+  color: #fff; margin-bottom: 2px;
+}
+.page-header p { font-size: 13px; color: rgba(255,255,255,0.6); }
+
+/* ══════════════════════════════════════
+   LOGIN
+══════════════════════════════════════ */
+#screen-login {
+  align-items: center; justify-content: center;
+  background: var(--ves-navy);
+  padding: 24px;
+}
+.login-card {
+  width: 100%; max-width: 360px;
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+  animation: fadeUp 0.4s ease both;
+  box-shadow: 0 8px 32px rgba(0,45,110,0.25);
+}
+.login-card-top {
+  background: var(--ves-navy);
+  padding: 32px 28px 28px;
+  text-align: center;
+}
+.login-logo-wrap {
+  margin-bottom: 16px;
+}
+/* Inline SVG logo */
+.login-logo-svg {
+  width: 180px; height: auto;
+}
+.login-tagline {
+  font-size: 13px; color: rgba(255,255,255,0.65); line-height: 1.5;
+  margin-top: 8px;
+}
+.login-card-body { padding: 28px; }
+.login-body-title { font-size: 16px; font-weight: 600; color: var(--ves-navy); margin-bottom: 6px; }
+.login-body-sub { font-size: 13px; color: var(--ves-muted); margin-bottom: 20px; line-height: 1.5; }
+.ms-btn {
+  width: 100%; height: var(--tap);
+  border: none; border-radius: var(--radius);
+  background: var(--ves-blue);
+  color: #fff; font-size: 15px; font-weight: 600; font-family: var(--sans);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  transition: background 0.15s;
+}
+.ms-btn:active { background: var(--ves-navy); transform: scale(0.99); }
 .ms-icon { width: 20px; height: 20px; display: grid; grid-template-columns:1fr 1fr; gap: 2px; flex-shrink: 0; }
 .ms-icon span { border-radius: 1px; }
-.ms-icon span:nth-child(1){background:#f25022} .ms-icon span:nth-child(2){background:#7fba00}
-.ms-icon span:nth-child(3){background:#00a4ef} .ms-icon span:nth-child(4){background:#ffb900}
-.login-hint { margin-top: 18px; font-size: 11px; color: var(--muted); font-family: var(--mono); }
+.ms-icon span:nth-child(1){background:#f25022}
+.ms-icon span:nth-child(2){background:#7fba00}
+.ms-icon span:nth-child(3){background:#00a4ef}
+.ms-icon span:nth-child(4){background:#ffb900}
+.login-hint {
+  margin-top: 14px; font-size: 11px; color: var(--ves-dim);
+  text-align: center; font-family: var(--mono);
+}
 
-/* ── SELECT ── */
+/* ══════════════════════════════════════
+   SELECT ACTION
+══════════════════════════════════════ */
 #screen-select { overflow-y: auto; -webkit-overflow-scrolling: touch; }
-.select-inner { padding: 28px 16px calc(16px + var(--safe-bottom)); display: flex; flex-direction: column; align-items: center; gap: 16px; }
-.select-heading { text-align: center; margin-bottom: 4px; }
-.select-label { font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.12em; color: var(--blue); text-transform: uppercase; margin-bottom: 6px; }
-.select-title { font-size: 22px; font-weight: 600; }
-.action-cards { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 480px; }
-.action-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; cursor: pointer; display: flex; align-items: center; gap: 16px; min-height: 82px; }
-.action-card:active { transform: scale(0.985); background: var(--surface2); }
-.ac-icon { width: 50px; height: 50px; border-radius: 13px; display: flex; align-items: center; justify-content: center; font-size: 25px; flex-shrink: 0; }
-.romutus .ac-icon { background: rgba(239,68,68,0.12); }
-.huolto  .ac-icon { background: rgba(245,158,11,0.12); }
-.varasto .ac-icon { background: rgba(34,197,94,0.12); }
-.ac-body { flex: 1; }
-.ac-title { font-size: 17px; font-weight: 600; margin-bottom: 3px; }
-.ac-desc { font-size: 13px; color: var(--muted); line-height: 1.4; }
-.ac-chev { font-size: 22px; flex-shrink: 0; }
-.romutus .ac-chev { color: rgba(239,68,68,0.45); }
-.huolto  .ac-chev { color: rgba(245,158,11,0.45); }
-.varasto .ac-chev { color: rgba(34,197,94,0.45); }
+.select-scroll { padding: 16px 16px calc(16px + var(--safe-bottom)); display: flex; flex-direction: column; gap: 10px; max-width: 560px; margin: 0 auto; width: 100%; }
 
-/* ── FORM ── */
-#screen-form { overflow-y: auto; -webkit-overflow-scrolling: touch; }
-.form-inner { padding: 18px 16px calc(20px + var(--safe-bottom)); display: flex; flex-direction: column; gap: 14px; max-width: 560px; margin: 0 auto; width: 100%; }
-.form-toprow { display: flex; align-items: center; gap: 12px; }
-.back-btn { width: var(--tap); height: var(--tap); border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--dim); font-size: 22px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-.back-btn:active { background: var(--surface2); }
-.form-badge-wrap { flex: 1; }
-.form-badge { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; padding: 4px 10px; border-radius: 5px; margin-bottom: 4px; }
-.badge-romutus { background: rgba(239,68,68,0.15); color: var(--red); }
-.badge-huolto  { background: rgba(245,158,11,0.15); color: var(--amber); }
-.badge-varasto { background: rgba(34,197,94,0.15); color: var(--green); }
-.form-title-text { font-size: 18px; font-weight: 600; }
-
-/* ── SCAN CARD ── */
-.scan-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
-.scan-card-header { padding: 14px 16px 12px; display: flex; align-items: center; justify-content: space-between; }
-.field-label { font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); }
-.count-pill { font-family: var(--mono); font-size: 12px; padding: 3px 10px; border-radius: 20px; background: var(--surface2); border: 1px solid var(--border); color: var(--dim); }
-.count-pill span { color: var(--text); font-weight: 600; }
-
-/* ── SCAN BUTTON (main action) ── */
-.scan-main-btn {
-  width: 100%; height: 70px;
-  border: none; border-top: 1px solid var(--border);
-  background: linear-gradient(135deg, #1e3a5f, #1e40af);
-  color: #fff;
-  font-size: 16px; font-weight: 600; font-family: var(--sans);
+.action-card {
+  background: #fff;
+  border: 1px solid var(--ves-line);
+  border-radius: var(--radius);
+  padding: 18px 16px;
   cursor: pointer;
-  display: flex; align-items: center; justify-content: center; gap: 12px;
+  display: flex; align-items: center; gap: 14px;
+  min-height: 78px;
+  position: relative;
+  transition: box-shadow 0.15s, border-color 0.15s;
+  overflow: hidden;
+}
+.action-card::before {
+  content: ''; position: absolute;
+  left: 0; top: 0; bottom: 0; width: 4px;
+  background: var(--ca, var(--ves-blue));
+  border-radius: var(--radius) 0 0 var(--radius);
+}
+.action-card:active { box-shadow: 0 2px 12px rgba(0,45,110,0.1); }
+
+.action-card.romutus { --ca: var(--red); }
+.action-card.huolto  { --ca: var(--amber); }
+.action-card.varasto { --ca: var(--ves-blue); }
+
+.ac-icon-wrap {
+  width: 46px; height: 46px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; flex-shrink: 0;
+}
+.romutus .ac-icon-wrap { background: var(--red-bg); }
+.huolto  .ac-icon-wrap { background: var(--amber-bg); }
+.varasto .ac-icon-wrap { background: var(--ves-light); }
+
+.ac-body { flex: 1; }
+.ac-title { font-size: 16px; font-weight: 600; color: var(--ves-navy); margin-bottom: 2px; }
+.ac-desc { font-size: 13px; color: var(--ves-muted); line-height: 1.4; }
+.ac-arrow { color: var(--ves-dim); font-size: 20px; flex-shrink: 0; }
+
+/* ══════════════════════════════════════
+   FORM
+══════════════════════════════════════ */
+#screen-form { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.form-scroll {
+  padding: 16px 16px calc(20px + var(--safe-bottom));
+  display: flex; flex-direction: column; gap: 12px;
+  max-width: 560px; margin: 0 auto; width: 100%;
+}
+
+.form-toprow { display: flex; align-items: center; gap: 12px; margin-bottom: 2px; }
+.back-btn {
+  width: var(--tap); height: var(--tap);
+  border-radius: var(--radius); border: 1px solid var(--ves-line);
+  background: #fff; color: var(--ves-navy);
+  font-size: 22px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+.back-btn:active { background: var(--ves-light); }
+
+.form-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.07em;
+  text-transform: uppercase; padding: 3px 8px; border-radius: 3px;
+  margin-bottom: 3px;
+}
+.badge-romutus { background: var(--red-bg);   color: var(--red); }
+.badge-huolto  { background: var(--amber-bg); color: var(--amber); }
+.badge-varasto { background: var(--ves-light); color: var(--ves-blue); }
+.form-title-text { font-size: 17px; font-weight: 600; color: var(--ves-navy); }
+
+/* CARD */
+.card {
+  background: #fff;
+  border: 1px solid var(--ves-line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+}
+.card-header {
+  padding: 13px 16px 11px;
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid var(--ves-line);
+  background: var(--ves-light);
+}
+.field-label {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--ves-muted);
+}
+.count-pill {
+  font-family: var(--mono); font-size: 12px;
+  padding: 2px 9px; border-radius: 20px;
+  background: var(--ves-navy); color: #fff;
+}
+.count-pill span { font-weight: 600; }
+
+/* Camera viewport */
+#cam-viewport {
+  display: none; position: relative;
+  background: #000; overflow: hidden; max-height: 260px;
+}
+#quagga-container { width: 100%; }
+.cam-overlay-frame {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none;
+}
+.cam-frame-box {
+  width: 82%; height: 88px;
+  border: 2px solid rgba(0,174,239,0.9);
+  border-radius: 5px;
+  box-shadow: 0 0 0 9999px rgba(0,0,0,0.5);
   position: relative; overflow: hidden;
 }
-.scan-main-btn:active { opacity: 0.85; }
-.scan-main-btn .scan-btn-icon { font-size: 28px; }
-.scan-main-btn .scan-btn-sub { font-size: 12px; font-weight: 400; opacity: 0.7; margin-top: 2px; }
-.scan-main-btn-inner { display: flex; flex-direction: column; align-items: flex-start; }
-
-/* hidden file input */
-#cam-file-input { display: none; }
-
-/* processing indicator */
-.scan-processing {
-  display: none; padding: 12px 16px;
-  background: rgba(59,130,246,0.07); border-top: 1px solid rgba(59,130,246,0.2);
-  font-size: 13px; color: var(--blue);
-  align-items: center; gap: 10px;
+.cam-scanline {
+  position: absolute; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg,transparent,#00AEEF,transparent);
+  animation: scanline 2s ease-in-out infinite; top: 0;
 }
-.scan-processing.show { display: flex; }
-.mini-spin { width: 16px; height: 16px; border: 2px solid rgba(59,130,246,0.3); border-top-color: var(--blue); border-radius: 50%; animation: spin 0.6s linear infinite; flex-shrink: 0; }
-@keyframes spin { to { transform: rotate(360deg); } }
-
-/* result flash */
-.scan-result {
-  display: none; padding: 10px 16px;
-  font-size: 13px; align-items: center; gap: 8px;
-  border-top: 1px solid var(--border);
+.cam-hint-text {
+  position: absolute; bottom: 8px; left: 0; right: 0;
+  text-align: center; font-size: 12px;
+  color: rgba(255,255,255,0.65); font-family: var(--mono);
 }
-.scan-result.ok  { display: flex; background: rgba(34,197,94,0.07);  border-color: rgba(34,197,94,0.2);  color: #86efac; }
-.scan-result.err { display: flex; background: rgba(239,68,68,0.07); border-color: rgba(239,68,68,0.2); color: #fca5a5; }
-
-/* error banner */
-.scan-error { display: none; padding: 10px 16px; background: rgba(239,68,68,0.07); border-top: 1px solid rgba(239,68,68,0.2); font-size: 12px; color: #fca5a5; line-height: 1.5; }
-.scan-error.show { display: block; }
-
-/* ── MANUAL INPUT ── */
-.manual-row { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--border); background: var(--bg); }
-.manual-input { flex: 1; height: var(--tap); padding: 0 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; color: var(--text); font-family: var(--mono); font-size: 14px; outline: none; -webkit-appearance: none; }
-.manual-input:focus { border-color: var(--blue); }
-.manual-input::placeholder { color: var(--muted); }
-.manual-add-btn { height: var(--tap); padding: 0 18px; border: none; border-radius: 10px; background: var(--blue); color: #fff; font-size: 15px; font-weight: 600; font-family: var(--sans); cursor: pointer; flex-shrink: 0; }
-.manual-add-btn:active { opacity: 0.8; }
-
-/* ── CHIPS ── */
-.chips-empty { padding: 4px 16px 14px; font-size: 13px; color: var(--muted); font-style: italic; }
-.chips-wrap { display: none; padding: 4px 12px 12px; flex-wrap: wrap; gap: 8px; }
-.chip { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; font-family: var(--mono); font-size: 13px; color: var(--dim); animation: chipIn 0.18s cubic-bezier(.175,.885,.32,1.275) both; }
-@keyframes chipIn { from{opacity:0;transform:scale(0.8)} to{opacity:1;transform:scale(1)} }
-.chip-x { background: none; border: none; color: var(--muted); font-size: 18px; line-height: 1; cursor: pointer; padding: 0; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 5px; }
-.chip-x:active { color: var(--red); background: rgba(239,68,68,0.1); }
-
-/* ── NOTES ── */
-.notes-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
-.notes-hdr { padding: 14px 16px 10px; }
-.notes-ta { width: 100%; padding: 0 16px 14px; background: transparent; border: none; outline: none; color: var(--text); font-family: var(--sans); font-size: 14px; line-height: 1.6; resize: none; min-height: 72px; -webkit-appearance: none; }
-.notes-ta::placeholder { color: var(--muted); }
-
-/* ── SUBMIT ── */
-.submit-btn { width: 100%; height: 60px; border: none; border-radius: 14px; font-size: 17px; font-weight: 600; font-family: var(--sans); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: var(--safe-bottom); }
-.submit-btn.romutus { background: var(--red); color: #fff; }
-.submit-btn.huolto  { background: var(--amber); color: #111; }
-.submit-btn.varasto { background: var(--green); color: #111; }
-.submit-btn:disabled { opacity: 0.25; cursor: not-allowed; }
-.submit-btn:not(:disabled):active { opacity: 0.85; transform: scale(0.98); }
-
-/* ── SUCCESS ── */
-#screen-success { align-items: center; justify-content: center; padding: 24px; overflow-y: auto; }
-.success-wrap { text-align: center; max-width: 380px; width: 100%; animation: fadeUp 0.4s ease both; }
-.success-circle { width: 72px; height: 72px; border-radius: 50%; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center; font-size: 34px; animation: popIn 0.45s cubic-bezier(.175,.885,.32,1.275) both 0.05s; }
-@keyframes popIn { from{opacity:0;transform:scale(0.4)} to{opacity:1;transform:scale(1)} }
-.success-circle.romutus { background: rgba(239,68,68,0.15); }
-.success-circle.huolto  { background: rgba(245,158,11,0.15); }
-.success-circle.varasto { background: rgba(34,197,94,0.15); }
-.success-title { font-size: 22px; font-weight: 600; margin-bottom: 8px; }
-.success-sub { font-size: 14px; color: var(--muted); line-height: 1.5; margin-bottom: 20px; }
-.success-meta { font-family: var(--mono); font-size: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; text-align: left; margin-bottom: 24px; line-height: 2; }
-.meta-row { display: flex; justify-content: space-between; gap: 16px; }
-.meta-k { color: var(--muted); } .meta-v { color: var(--dim); font-weight: 500; }
-.new-btn { width: 100%; height: var(--tap); border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--dim); font-size: 15px; font-weight: 500; font-family: var(--sans); cursor: pointer; }
-.new-btn:active { border-color: var(--blue); color: var(--text); }
-
-/* ── LOADING ── */
-.loading-overlay { display: none; position: fixed; inset: 0; background: rgba(15,17,23,0.8); backdrop-filter: blur(4px); z-index: 200; align-items: center; justify-content: center; flex-direction: column; gap: 14px; }
-.loading-overlay.on { display: flex; }
-.spinner { width: 36px; height: 36px; border: 2px solid var(--border); border-top-color: var(--blue); border-radius: 50%; animation: spin 0.7s linear infinite; }
-.loading-txt { font-family: var(--mono); font-size: 13px; color: var(--muted); }
-
-/* scanline animation for camera overlay */
-@keyframes scanline {
-  0%   { top: 2px; opacity: 0; }
-  10%  { opacity: 1; }
-  90%  { opacity: 1; }
-  100% { top: calc(100% - 2px); opacity: 0; }
+#cam-flash {
+  position: absolute; inset: 0;
+  background: #00AEEF; opacity: 0; pointer-events: none;
+  transition: opacity 0.06s;
 }
-/* Quagga2 lisää oman canvas-elementin — piilotetaan sen debug-piirrokset */
 #quagga-container canvas.drawingBuffer { display: none; }
 #quagga-container video { width: 100% !important; max-height: 260px; object-fit: cover; display: block; }
 
-/* ── TOAST ── */
-.toast { position: fixed; bottom: calc(20px + var(--safe-bottom)); left: 50%; transform: translateX(-50%) translateY(80px); padding: 11px 18px; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; font-size: 13px; color: var(--text); box-shadow: 0 8px 24px rgba(0,0,0,0.5); z-index: 300; opacity: 0; transition: all 0.25s ease; max-width: 90vw; text-align: center; }
-.toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
-.toast.ok  { border-color: var(--green); }
-.toast.err { border-color: var(--red); }
+/* Big scan button */
+.scan-toggle-btn {
+  width: 100%; min-height: 62px;
+  border: none;
+  background: var(--ves-navy);
+  color: #fff;
+  font-size: 15px; font-weight: 600; font-family: var(--sans);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  padding: 14px 16px;
+}
+.scan-toggle-btn:active { background: var(--ves-blue); }
+.scan-toggle-btn.active { background: #8B0015; }
+.scan-btn-icon { font-size: 24px; flex-shrink: 0; }
+.scan-btn-texts { display: flex; flex-direction: column; align-items: flex-start; }
+.scan-btn-sub { font-size: 12px; font-weight: 400; opacity: 0.65; margin-top: 1px; }
 
-/* hidden canvas for image decoding */
-#decode-canvas { display: none; }
+/* Fallback file input */
+input[type="file"]#cam-file-input { display: none; }
+#fallback-row { display: none; padding: 10px 14px; border-top: 1px solid var(--ves-line); }
+#fallback-row button {
+  width: 100%; height: 42px;
+  border: 1px dashed var(--ves-line); border-radius: var(--radius);
+  background: transparent; color: var(--ves-muted);
+  font-size: 13px; font-family: var(--sans); cursor: pointer;
+}
+#fallback-row button:active { background: var(--ves-light); }
+
+/* Scan feedback rows */
+.scan-processing {
+  display: none; padding: 10px 16px;
+  background: var(--ves-light); border-top: 1px solid var(--ves-line);
+  align-items: center; gap: 10px;
+  font-size: 13px; color: var(--ves-blue);
+}
+.scan-processing.show { display: flex; }
+.mini-spin { width: 15px; height: 15px; border: 2px solid var(--ves-line); border-top-color: var(--ves-blue); border-radius: 50%; animation: spin 0.6s linear infinite; flex-shrink: 0; }
+
+.scan-result {
+  display: none; padding: 10px 16px;
+  font-size: 13px; align-items: center; gap: 8px; border-top: 1px solid var(--ves-line);
+}
+.scan-result.ok  { display: flex; background: var(--green-bg); color: var(--green); }
+.scan-result.err { display: flex; background: var(--red-bg);   color: var(--red); }
+
+.scan-error {
+  display: none; padding: 10px 14px;
+  background: var(--red-bg); border-top: 1px solid #ffd0d8;
+  font-size: 13px; color: var(--red); line-height: 1.5;
+}
+.scan-error.show { display: block; }
+
+/* Manual input */
+.manual-row {
+  display: flex; gap: 8px;
+  padding: 10px 12px; border-top: 1px solid var(--ves-line);
+  background: #FAFBFD;
+}
+.manual-input {
+  flex: 1; height: var(--tap);
+  padding: 0 13px;
+  background: #fff; border: 1px solid var(--ves-line);
+  border-radius: var(--radius); color: var(--ves-text);
+  font-family: var(--mono); font-size: 14px;
+  outline: none; -webkit-appearance: none;
+}
+.manual-input:focus { border-color: var(--ves-blue); box-shadow: 0 0 0 3px rgba(0,85,184,0.1); }
+.manual-input::placeholder { color: var(--ves-dim); }
+.manual-add-btn {
+  height: var(--tap); padding: 0 18px;
+  border: none; border-radius: var(--radius);
+  background: var(--ves-blue); color: #fff;
+  font-size: 20px; font-weight: 400; font-family: var(--sans);
+  cursor: pointer; flex-shrink: 0;
+}
+.manual-add-btn:active { background: var(--ves-navy); }
+
+/* Chips */
+.chips-empty { padding: 10px 14px 14px; font-size: 13px; color: var(--ves-dim); font-style: italic; }
+.chips-wrap { display: none; padding: 10px 12px 12px; flex-wrap: wrap; gap: 7px; }
+.chip {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 10px;
+  background: var(--ves-light); border: 1px solid var(--ves-line);
+  border-radius: 4px;
+  font-family: var(--mono); font-size: 13px; color: var(--ves-navy);
+  animation: chipIn 0.18s cubic-bezier(.175,.885,.32,1.275) both;
+}
+.chip-x {
+  background: none; border: none; color: var(--ves-dim);
+  font-size: 16px; line-height: 1; cursor: pointer; padding: 0;
+  width: 20px; height: 20px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 3px;
+}
+.chip-x:active { color: var(--red); background: var(--red-bg); }
+
+/* Notes */
+.notes-hdr { padding: 13px 16px 10px; border-bottom: 1px solid var(--ves-line); background: var(--ves-light); }
+.notes-ta {
+  width: 100%; padding: 12px 14px;
+  background: transparent; border: none; outline: none;
+  color: var(--ves-text); font-family: var(--sans); font-size: 14px;
+  line-height: 1.6; resize: none; min-height: 70px; -webkit-appearance: none;
+}
+.notes-ta::placeholder { color: var(--ves-dim); }
+
+/* Submit */
+.submit-btn {
+  width: 100%; height: 54px;
+  border: none; border-radius: var(--radius);
+  font-size: 16px; font-weight: 600; font-family: var(--sans);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  margin-bottom: var(--safe-bottom);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+.submit-btn.romutus { background: var(--red);   color: #fff; }
+.submit-btn.huolto  { background: var(--amber);  color: #fff; }
+.submit-btn.varasto { background: var(--ves-navy); color: #fff; }
+.submit-btn:disabled { opacity: 0.3; cursor: not-allowed; box-shadow: none; }
+.submit-btn:not(:disabled):active { opacity: 0.88; transform: scale(0.99); }
+
+/* ══════════════════════════════════════
+   SUCCESS
+══════════════════════════════════════ */
+#screen-success { overflow-y: auto; }
+.success-scroll {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 100%; padding: 32px 20px calc(32px + var(--safe-bottom));
+}
+.success-wrap {
+  text-align: center; max-width: 380px; width: 100%;
+  animation: fadeUp 0.4s ease both;
+}
+.success-circle {
+  width: 68px; height: 68px; border-radius: 50%;
+  margin: 0 auto 20px;
+  display: flex; align-items: center; justify-content: center; font-size: 30px;
+  border: 2px solid transparent;
+}
+.success-circle.romutus { background: var(--red-bg);   border-color: #ffc0cb; }
+.success-circle.huolto  { background: var(--amber-bg); border-color: #ffd9a0; }
+.success-circle.varasto { background: var(--ves-light); border-color: var(--ves-line); }
+.success-title { font-size: 21px; font-weight: 700; color: var(--ves-navy); margin-bottom: 7px; }
+.success-sub { font-size: 14px; color: var(--ves-muted); line-height: 1.5; margin-bottom: 20px; }
+.success-meta {
+  font-family: var(--mono); font-size: 12px;
+  background: #fff; border: 1px solid var(--ves-line);
+  border-radius: var(--radius); padding: 14px 16px;
+  text-align: left; margin-bottom: 20px; line-height: 2.1;
+}
+.meta-row { display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--ves-line); }
+.meta-row:last-child { border-bottom: none; }
+.meta-k { color: var(--ves-muted); }
+.meta-v { color: var(--ves-navy); font-weight: 500; }
+.new-btn {
+  width: 100%; height: var(--tap);
+  border: 2px solid var(--ves-navy); border-radius: var(--radius);
+  background: transparent; color: var(--ves-navy);
+  font-size: 15px; font-weight: 600; font-family: var(--sans); cursor: pointer;
+}
+.new-btn:active { background: var(--ves-light); }
+
+/* ══════════════════════════════════════
+   LOADING
+══════════════════════════════════════ */
+.loading-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,45,110,0.55); backdrop-filter: blur(3px);
+  z-index: 200; align-items: center; justify-content: center;
+  flex-direction: column; gap: 14px;
+}
+.loading-overlay.on { display: flex; }
+.spinner { width: 36px; height: 36px; border: 3px solid rgba(255,255,255,0.2); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; }
+.loading-txt { font-size: 14px; color: #fff; font-family: var(--sans); }
+
+/* ══════════════════════════════════════
+   TOAST
+══════════════════════════════════════ */
+.toast {
+  position: fixed; bottom: calc(20px + var(--safe-bottom));
+  left: 50%; transform: translateX(-50%) translateY(80px);
+  padding: 11px 18px;
+  background: var(--ves-navy); color: #fff;
+  border-radius: var(--radius);
+  font-size: 13px; font-family: var(--sans);
+  box-shadow: 0 4px 20px rgba(0,45,110,0.35);
+  z-index: 300; opacity: 0;
+  transition: all 0.25s ease;
+  max-width: 90vw; text-align: center;
+}
+.toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+.toast.ok  { background: var(--green); }
+.toast.err { background: var(--red); }
 </style>
 </head>
 <body>
 
-<!-- TOPBAR -->
+<!-- ══ TOPBAR ══ -->
 <header class="topbar" id="topbar" style="display:none">
-  <div class="topbar-brand"><div class="topbar-dot"></div>MITTARIHALLINTA</div>
+  <div class="topbar-logo">
+    <!-- VES logo as inline SVG (white version) -->
+    <svg class="ves-logo-svg" viewBox="0 0 220 40" xmlns="http://www.w3.org/2000/svg" fill="white" aria-label="Vantaan Energia Sähköverkot">
+      <!-- Lightning bolt symbol -->
+      <polygon points="18,2 8,22 16,22 10,38 26,16 18,16 24,2" fill="#00AEEF"/>
+      <!-- Text -->
+      <text x="32" y="16" font-family="'Source Sans 3',Arial,sans-serif" font-size="11" font-weight="700" fill="white">VANTAAN ENERGIA</text>
+      <text x="32" y="30" font-family="'Source Sans 3',Arial,sans-serif" font-size="11" font-weight="400" fill="rgba(255,255,255,0.8)">SÄHKÖVERKOT</text>
+    </svg>
+  </div>
   <div class="topbar-right">
     <div class="avatar" id="user-avatar">AJ</div>
-    <span id="user-name" style="font-size:13px;color:var(--dim)"></span>
-    <button class="logout-btn" onclick="logout()">Ulos</button>
+    <span class="topbar-username" id="user-name"></span>
+    <button class="logout-btn" onclick="logout()">Kirjaudu ulos</button>
   </div>
 </header>
 
-<!-- ════ LOGIN ════ -->
+<!-- ══════════════ LOGIN ══════════════ -->
 <div class="screen active" id="screen-login">
   <div class="login-card">
-    <div class="login-logo">⚡</div>
-    <div class="login-title">Mittarihallinta</div>
-    <div class="login-sub">Kenttäpalvelun työkalu mittareiden romutukseen, huoltoon ja varastointiin</div>
-    <button class="ms-btn" onclick="doLogin()">
-      <div class="ms-icon"><span></span><span></span><span></span><span></span></div>
-      Kirjaudu Microsoft-tunnuksilla
-    </button>
-    <div class="login-hint">Microsoft Entra ID · SSO</div>
+    <div class="login-card-top">
+      <div class="login-logo-wrap">
+        <svg class="login-logo-svg" viewBox="0 0 240 52" xmlns="http://www.w3.org/2000/svg" aria-label="Vantaan Energia Sähköverkot">
+          <polygon points="22,2 9,26 19,26 12,50 32,20 22,20 30,2" fill="#00AEEF"/>
+          <text x="40" y="20" font-family="'Source Sans 3',Arial,sans-serif" font-size="14" font-weight="700" fill="white">VANTAAN ENERGIA</text>
+          <text x="40" y="38" font-family="'Source Sans 3',Arial,sans-serif" font-size="13.5" font-weight="400" fill="rgba(255,255,255,0.75)">SÄHKÖVERKOT</text>
+        </svg>
+      </div>
+      <div class="login-tagline">Kenttäpalvelun mittarinhallinta</div>
+    </div>
+    <div class="login-card-body">
+      <div class="login-body-title">Kirjaudu sisään</div>
+      <div class="login-body-sub">Käytä Vantaan Energian Microsoft-tunnuksiasi jatkaaksesi.</div>
+      <button class="ms-btn" onclick="doLogin()">
+        <div class="ms-icon"><span></span><span></span><span></span><span></span></div>
+        Kirjaudu Microsoft-tunnuksilla
+      </button>
+      <div class="login-hint">Microsoft Entra ID · SSO · Vantaan Energia</div>
+    </div>
   </div>
 </div>
 
-<!-- ════ SELECT ════ -->
+<!-- ══════════════ SELECT ══════════════ -->
 <div class="screen" id="screen-select">
-  <div class="select-inner">
-    <div class="select-heading">
-      <div class="select-label">Valitse toiminto</div>
-      <div class="select-title">Mitä teet mittarille?</div>
+  <div class="page-header">
+    <h1>Mittarinhallinta</h1>
+    <p>Valitse toiminto</p>
+  </div>
+  <div class="select-scroll">
+    <div class="action-card romutus" onclick="selectAction('romutus')">
+      <div class="ac-icon-wrap">🗑️</div>
+      <div class="ac-body">
+        <div class="ac-title">Romutus</div>
+        <div class="ac-desc">Mittari poistetaan käytöstä pysyvästi ja viedään romutukseen</div>
+      </div>
+      <div class="ac-arrow">›</div>
     </div>
-    <div class="action-cards">
-      <div class="action-card romutus" onclick="selectAction('romutus')">
-        <div class="ac-icon">🗑️</div>
-        <div class="ac-body"><div class="ac-title">Romutus</div><div class="ac-desc">Mittari poistetaan käytöstä pysyvästi</div></div>
-        <div class="ac-chev">›</div>
+    <div class="action-card huolto" onclick="selectAction('huolto')">
+      <div class="ac-icon-wrap">🔧</div>
+      <div class="ac-body">
+        <div class="ac-title">Huolto</div>
+        <div class="ac-desc">Mittari lähetetään huoltoon tarkistettavaksi tai korjattavaksi</div>
       </div>
-      <div class="action-card huolto" onclick="selectAction('huolto')">
-        <div class="ac-icon">🔧</div>
-        <div class="ac-body"><div class="ac-title">Huolto</div><div class="ac-desc">Mittari lähetetään huoltoon tai korjaukseen</div></div>
-        <div class="ac-chev">›</div>
+      <div class="ac-arrow">›</div>
+    </div>
+    <div class="action-card varasto" onclick="selectAction('varasto')">
+      <div class="ac-icon-wrap">📦</div>
+      <div class="ac-body">
+        <div class="ac-title">Varasto</div>
+        <div class="ac-desc">Mittari palautetaan varastoon uudelleenkäyttöä varten</div>
       </div>
-      <div class="action-card varasto" onclick="selectAction('varasto')">
-        <div class="ac-icon">📦</div>
-        <div class="ac-body"><div class="ac-title">Varasto</div><div class="ac-desc">Mittari palautetaan varastoon uudelleenkäyttöön</div></div>
-        <div class="ac-chev">›</div>
-      </div>
+      <div class="ac-arrow">›</div>
     </div>
   </div>
 </div>
 
-<!-- ════ FORM ════ -->
+<!-- ══════════════ FORM ══════════════ -->
 <div class="screen" id="screen-form">
-  <div class="form-inner">
+  <div class="page-header" id="form-page-header">
+    <h1 id="form-page-title">Romutus</h1>
+    <p>Skannaa tai syötä sarjanumerot</p>
+  </div>
+  <div class="form-scroll">
 
     <div class="form-toprow">
       <button class="back-btn" onclick="goBack()">‹</button>
-      <div class="form-badge-wrap">
+      <div>
         <div class="form-badge" id="form-badge"></div>
-        <div class="form-title-text">Syötä sarjanumerot</div>
+        <div class="form-title-text" id="form-title-text">Sarjanumerot</div>
       </div>
     </div>
 
-    <div class="scan-card">
-      <div class="scan-card-header">
-        <div class="field-label">Sarjanumerot</div>
-        <div class="count-pill"><span id="serial-count">0</span> kpl</div>
+    <!-- SCAN CARD -->
+    <div class="card">
+      <div class="card-header">
+        <span class="field-label">Sarjanumerot</span>
+        <span class="count-pill"><span id="serial-count">0</span> kpl</span>
       </div>
 
-      <!-- Live camera viewport — Quagga2 renderöi videoelementin tähän -->
-      <div id="cam-viewport" style="display:none;position:relative;background:#000;overflow:hidden;max-height:260px;">
-        <div id="quagga-container" style="width:100%;"></div>
-        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;">
-          <div style="width:82%;height:90px;border:2px solid rgba(59,130,246,0.85);border-radius:6px;box-shadow:0 0 0 9999px rgba(0,0,0,0.45);position:relative;overflow:hidden;">
-            <div style="position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#3b82f6,transparent);animation:scanline 2s ease-in-out infinite;top:0;"></div>
+      <!-- Camera live view -->
+      <div id="cam-viewport">
+        <div id="quagga-container"></div>
+        <div class="cam-overlay-frame">
+          <div class="cam-frame-box">
+            <div class="cam-scanline"></div>
           </div>
         </div>
-        <div style="position:absolute;bottom:8px;left:0;right:0;text-align:center;font-size:12px;font-family:var(--mono);color:rgba(255,255,255,0.6);">Aseta viivakoodi kehyksen sisälle</div>
-        <div id="cam-flash" style="position:absolute;inset:0;background:#22c55e;opacity:0;pointer-events:none;transition:opacity 0.08s;"></div>
+        <div class="cam-hint-text">Aseta viivakoodi kehyksen sisälle</div>
+        <div id="cam-flash"></div>
       </div>
 
-      <!-- Scan toggle button -->
-      <button class="scan-main-btn" id="scan-main-btn" onclick="toggleLiveScan()">
+      <!-- Scan toggle -->
+      <button class="scan-toggle-btn" id="scan-toggle-btn" onclick="toggleLiveScan()">
         <span class="scan-btn-icon" id="scan-btn-icon">📷</span>
-        <div class="scan-main-btn-inner">
+        <div class="scan-btn-texts">
           <span id="scan-btn-label">Skannaa kameralla</span>
-          <span class="scan-btn-sub">Live-skannaus · Code128, EAN, Code39, QR…</span>
+          <span class="scan-btn-sub">Live-skannaus · Code128, EAN, Code39…</span>
         </div>
       </button>
 
-      <!-- Fallback file input (jos live ei toimi) -->
-      <input type="file" id="cam-file-input" accept="image/*" capture="environment" onchange="handleFileCapture(event)" style="display:none;" />
-      <div id="fallback-row" style="display:none;padding:8px 16px 10px;border-top:1px solid var(--border);">
-        <button onclick="document.getElementById('cam-file-input').value='';document.getElementById('cam-file-input').click()" style="width:100%;height:44px;border:1px dashed var(--border);border-radius:8px;background:transparent;color:var(--muted);font-size:13px;font-family:var(--sans);cursor:pointer;">
+      <!-- Fallback -->
+      <input type="file" id="cam-file-input" accept="image/*" capture="environment" onchange="handleFileCapture(event)"/>
+      <div id="fallback-row">
+        <button onclick="document.getElementById('cam-file-input').value='';document.getElementById('cam-file-input').click()">
           📁 Vaihtoehto: valitse kuva galleriasta
         </button>
       </div>
 
-      <!-- processing -->
+      <!-- Feedback -->
       <div class="scan-processing" id="scan-processing">
         <div class="mini-spin"></div>
         <span id="scan-processing-txt">Avataan kamera…</span>
       </div>
-
-      <!-- result -->
       <div class="scan-result" id="scan-result"></div>
-
-      <!-- error -->
       <div class="scan-error" id="scan-error"></div>
 
-      <!-- manual input -->
+      <!-- Manual -->
       <div class="manual-row">
-        <input
-          class="manual-input" id="manual-input"
-          placeholder="Tai kirjoita sarjanumero…"
+        <input class="manual-input" id="manual-input"
+          placeholder="Kirjoita sarjanumero käsin…"
           inputmode="numeric"
           onkeydown="manualKeydown(event)"
-          autocomplete="off" autocorrect="off" spellcheck="false"
-        />
+          autocomplete="off" autocorrect="off" spellcheck="false"/>
         <button class="manual-add-btn" onclick="addManual()">+</button>
       </div>
 
@@ -360,30 +657,33 @@ body {
       <div class="chips-wrap" id="chips-wrap"></div>
     </div>
 
-    <div class="notes-card">
-      <div class="notes-hdr"><div class="field-label">Lisätiedot (vapaaehtoinen)</div></div>
-      <textarea class="notes-ta" id="notes-input" placeholder="Esim. vika, sijainti, syy…"></textarea>
+    <!-- NOTES -->
+    <div class="card">
+      <div class="notes-hdr"><span class="field-label">Lisätiedot (vapaaehtoinen)</span></div>
+      <textarea class="notes-ta" id="notes-input" placeholder="Esim. vika, sijainti, syy romutukselle…"></textarea>
     </div>
 
     <button class="submit-btn" id="submit-btn" onclick="submitForm()" disabled>
       <span id="submit-icon">📤</span>
       <span id="submit-label">Lähetä</span>
     </button>
-
   </div>
 </div>
 
-<!-- ════ SUCCESS ════ -->
+<!-- ══════════════ SUCCESS ══════════════ -->
 <div class="screen" id="screen-success">
-  <div class="success-wrap">
-    <div class="success-circle" id="success-circle"></div>
-    <div class="success-title" id="success-title"></div>
-    <div class="success-sub" id="success-sub"></div>
-    <div class="success-meta" id="success-meta"></div>
-    <button class="new-btn" onclick="newAction()">← Uusi toiminto</button>
+  <div class="success-scroll">
+    <div class="success-wrap">
+      <div class="success-circle" id="success-circle"></div>
+      <div class="success-title" id="success-title"></div>
+      <div class="success-sub" id="success-sub"></div>
+      <div class="success-meta" id="success-meta"></div>
+      <button class="new-btn" onclick="newAction()">← Uusi toiminto</button>
+    </div>
   </div>
 </div>
 
+<!-- LOADING + TOAST -->
 <div class="loading-overlay" id="loading-overlay">
   <div class="spinner"></div>
   <div class="loading-txt" id="loading-txt">Lähetetään…</div>
@@ -395,18 +695,42 @@ body {
 let currentUser = null;
 let currentAction = null;
 let serialSet = new Set();
+let quaggaRunning = false;
+let lastScanned = '', lastScannedAt = 0;
 
 const CFG = {
-  romutus: { label:'Romutus', badgeCls:'badge-romutus', submitCls:'romutus', icon:'🗑️', submitLabel:'Romuta mittarit', successTitle:'Romutus kirjattu!', successSub:'Mittarit kirjattu romutukseen ja tiedot välitetty järjestelmään.' },
-  huolto:  { label:'Huolto',  badgeCls:'badge-huolto',  submitCls:'huolto',  icon:'🔧', submitLabel:'Lähetä huoltoon',  successTitle:'Huoltolähetys kirjattu!', successSub:'Mittareiden huoltolähetys kirjattu järjestelmään.' },
-  varasto: { label:'Varasto', badgeCls:'badge-varasto', submitCls:'varasto', icon:'📦', submitLabel:'Vie varastoon',   successTitle:'Varastokirjaus tehty!', successSub:'Mittarit kirjattu varastoon uudelleenkäyttöä varten.' },
+  romutus: {
+    label:'Romutus', badgeCls:'badge-romutus', submitCls:'romutus',
+    icon:'🗑️', submitLabel:'Romuta mittarit',
+    successTitle:'Romutus kirjattu!',
+    successSub:'Mittarit on kirjattu romutukseen. Tiedot on välitetty järjestelmään.',
+  },
+  huolto: {
+    label:'Huolto', badgeCls:'badge-huolto', submitCls:'huolto',
+    icon:'🔧', submitLabel:'Lähetä huoltoon',
+    successTitle:'Huoltolähetys kirjattu!',
+    successSub:'Mittareiden huoltolähetys on kirjattu järjestelmään.',
+  },
+  varasto: {
+    label:'Varasto', badgeCls:'badge-varasto', submitCls:'varasto',
+    icon:'📦', submitLabel:'Vie varastoon',
+    successTitle:'Varastokirjaus tehty!',
+    successSub:'Mittarit on kirjattu varastoon uudelleenkäyttöä varten.',
+  },
 };
+
+const READERS = [
+  'code_128_reader','ean_reader','ean_8_reader',
+  'code_39_reader','code_39_vin_reader','codabar_reader',
+  'upc_reader','upc_e_reader','i2of5_reader','2of5_reader',
+];
 
 // ══ NAV ══
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('screen-' + id).classList.add('active');
   document.getElementById('topbar').style.display = id === 'login' ? 'none' : 'flex';
+  if (id !== 'form') stopLiveScan();
 }
 
 // ══ LOGIN ══
@@ -416,34 +740,47 @@ function doLogin() {
     currentUser = { name: 'Antti Jokinen', initials: 'AJ' };
     document.getElementById('user-avatar').textContent = 'AJ';
     document.getElementById('user-name').textContent = 'A. Jokinen';
-    hideLoading(); showScreen('select'); toast('Kirjauduttu sisään ✓', 'ok');
-  }, 1400);
+    hideLoading();
+    showScreen('select');
+    toast('Kirjauduttu sisään ✓', 'ok');
+  }, 1300);
 }
-function logout() { stopLiveScan(); currentUser = null; currentAction = null; serialSet.clear(); showScreen('login'); }
+function logout() {
+  stopLiveScan();
+  currentUser = null; currentAction = null; serialSet.clear();
+  showScreen('login');
+}
 
 // ══ SELECT ══
 function selectAction(action) {
   currentAction = action;
   const c = CFG[action];
+
+  document.getElementById('form-page-title').textContent = c.label;
   const badge = document.getElementById('form-badge');
-  badge.textContent = c.icon + ' ' + c.label;
+  badge.textContent = c.icon + '  ' + c.label;
   badge.className = 'form-badge ' + c.badgeCls;
+  document.getElementById('form-title-text').textContent = 'Sarjanumerot';
+
   const btn = document.getElementById('submit-btn');
   btn.className = 'submit-btn ' + c.submitCls;
   document.getElementById('submit-icon').textContent = c.icon;
   document.getElementById('submit-label').textContent = c.submitLabel;
+
   serialSet.clear();
   document.getElementById('manual-input').value = '';
   document.getElementById('notes-input').value = '';
   clearScanFeedback();
-  renderChips(); updateBtn();
+  renderChips();
+  updateBtn();
   showScreen('form');
 }
 
+function goBack() { stopLiveScan(); showScreen('select'); }
 
 // ══ SERIALS ══
 function addSerial(raw) {
-  const val = raw.trim().replace(/\s+/g,'');
+  const val = raw.trim();
   if (!val || val.length < 4) return false;
   if (serialSet.has(val)) { toast('Jo listalla: ' + val, 'err'); return false; }
   serialSet.add(val); renderChips(); updateBtn();
@@ -454,7 +791,9 @@ function renderChips() {
   const wrap = document.getElementById('chips-wrap');
   const empty = document.getElementById('chips-empty');
   document.getElementById('serial-count').textContent = serialSet.size;
-  if (serialSet.size === 0) { wrap.style.display='none'; empty.style.display='block'; return; }
+  if (serialSet.size === 0) {
+    wrap.style.display = 'none'; empty.style.display = 'block'; return;
+  }
   empty.style.display = 'none'; wrap.style.display = 'flex';
   wrap.innerHTML = '';
   serialSet.forEach(s => {
@@ -471,32 +810,8 @@ function addManual() {
 }
 function manualKeydown(e) { if (e.key === 'Enter') { e.preventDefault(); addManual(); } }
 
-// ══ BARCODE — Quagga2 ══
-// Live-kameratila: Quagga2 käyttää getUserMedia + canvas-pohjaista dekoodausta.
-// Fallback: kuvatiedoston dekoodaus Quagga2.decodeSingle():lla.
-// Tuetut formaatit: Code128, Code39, EAN-13, EAN-8, UPC, Codabar, i2of5 jm.
-
-let quaggaRunning = false;
-// Debounce: estetään sama koodi lisäämästä useita kertoja peräkkäin
-let lastScanned = '';
-let lastScannedAt = 0;
-
-const QUAGGA_READERS = [
-  'code_128_reader',
-  'ean_reader',
-  'ean_8_reader',
-  'code_39_reader',
-  'code_39_vin_reader',
-  'codabar_reader',
-  'upc_reader',
-  'upc_e_reader',
-  'i2of5_reader',
-  '2of5_reader',
-];
-
-function toggleLiveScan() {
-  quaggaRunning ? stopLiveScan() : startLiveScan();
-}
+// ══ QUAGGA2 LIVE SCAN ══
+function toggleLiveScan() { quaggaRunning ? stopLiveScan() : startLiveScan(); }
 
 function startLiveScan() {
   clearScanFeedback();
@@ -505,104 +820,80 @@ function startLiveScan() {
   document.getElementById('scan-processing-txt').textContent = 'Avataan kamera…';
   document.getElementById('scan-btn-icon').textContent = '⏹';
   document.getElementById('scan-btn-label').textContent = 'Lopeta skannaus';
-  document.getElementById('scan-main-btn').style.background = 'linear-gradient(135deg,#3b1e1e,#7f1d1d)';
+  document.getElementById('scan-toggle-btn').classList.add('active');
 
   Quagga.init({
     inputStream: {
-      name: 'Live',
-      type: 'LiveStream',
+      name: 'Live', type: 'LiveStream',
       target: document.getElementById('quagga-container'),
-      constraints: {
-        facingMode: 'environment',   // takakamera
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
-      },
+      constraints: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
     },
-    decoder: {
-      readers: QUAGGA_READERS,
-      multiple: false,
-    },
+    decoder: { readers: READERS, multiple: false },
     locate: true,
-    frequency: 10,   // dekoodausyrityksiä per sekunti
+    frequency: 10,
   }, function(err) {
     document.getElementById('scan-processing').classList.remove('show');
     if (err) {
       document.getElementById('cam-viewport').style.display = 'none';
       document.getElementById('scan-btn-icon').textContent = '📷';
       document.getElementById('scan-btn-label').textContent = 'Skannaa kameralla';
-      document.getElementById('scan-main-btn').style.background = '';
+      document.getElementById('scan-toggle-btn').classList.remove('active');
       quaggaRunning = false;
-
-      // Näytä virhe + fallback file-input
       let msg = 'Kameran avaaminen epäonnistui.';
-      if (err.name === 'NotAllowedError' || (err.message && err.message.includes('Permission'))) {
-        msg = 'Kameran käyttöoikeus evätty. Anna lupa selaimen asetuksissa.';
-      } else if (err.name === 'NotFoundError') {
+      if (err.name === 'NotAllowedError' || (err.message && err.message.includes('Permission')))
+        msg = 'Kameran käyttöoikeus evätty. Anna lupa selaimen asetuksissa ja lataa sivu uudelleen.';
+      else if (err.name === 'NotFoundError')
         msg = 'Kameraa ei löydy. Kokeile alla olevaa kuvanvalintaa.';
-      } else if (err.message) {
-        msg = 'Kameravirhe: ' + err.message;
-      }
       showScanError(msg);
       document.getElementById('fallback-row').style.display = 'block';
       return;
     }
-
     Quagga.start();
     quaggaRunning = true;
 
-    // Viivakoodi tunnistettu — tapahtumankäsittelijä
     Quagga.onDetected(function(result) {
       if (!result || !result.codeResult || !result.codeResult.code) return;
       const code = result.codeResult.code;
       const now = Date.now();
-
-      // Debounce: sama koodi uudelleen vain 2.5s jälkeen
       if (code === lastScanned && (now - lastScannedAt) < 2500) return;
-      lastScanned = code;
-      lastScannedAt = now;
-
+      lastScanned = code; lastScannedAt = now;
       onBarcodeFound(code);
     });
   });
 }
 
 function stopLiveScan() {
-  if (quaggaRunning) {
-    try { Quagga.stop(); } catch(e) {}
-    quaggaRunning = false;
-  }
+  if (quaggaRunning) { try { Quagga.stop(); } catch(e){} quaggaRunning = false; }
   document.getElementById('cam-viewport').style.display = 'none';
-  document.getElementById('scan-btn-icon').textContent = '📷';
-  document.getElementById('scan-btn-label').textContent = 'Skannaa kameralla';
-  document.getElementById('scan-main-btn').style.background = '';
+  const btn = document.getElementById('scan-toggle-btn');
+  if (btn) {
+    btn.classList.remove('active');
+    document.getElementById('scan-btn-icon').textContent = '📷';
+    document.getElementById('scan-btn-label').textContent = 'Skannaa kameralla';
+  }
   lastScanned = '';
 }
 
-// Fallback: dekoodaa galleriasta valittu kuva Quagga2:lla
+// ══ FALLBACK FILE ══
 function handleFileCapture(event) {
   const file = event.target.files && event.target.files[0];
   if (!file) return;
   clearScanFeedback();
   document.getElementById('scan-processing').classList.add('show');
   document.getElementById('scan-processing-txt').textContent = 'Luetaan viivakoodia…';
-
   const url = URL.createObjectURL(file);
-
   Quagga.decodeSingle({
-    src: url,
-    numOfWorkers: 0,
-    locate: true,
-    decoder: { readers: QUAGGA_READERS },
+    src: url, numOfWorkers: 0, locate: true,
+    decoder: { readers: READERS },
     locator: { patchSize: 'medium', halfSample: true },
   }, function(result) {
     URL.revokeObjectURL(url);
     document.getElementById('scan-processing').classList.remove('show');
-
     if (result && result.codeResult && result.codeResult.code) {
       onBarcodeFound(result.codeResult.code);
     } else {
-      showScanResult('err', '⚠ Viivakoodia ei tunnistettu. Ota kuva lähempää hyvässä valaistuksessa.');
-      if (navigator.vibrate) navigator.vibrate([40, 30, 40]);
+      showScanResult('err', '⚠ Viivakoodia ei tunnistettu. Ota selkeämpi kuva lähempää.');
+      if (navigator.vibrate) navigator.vibrate([40,30,40]);
     }
   });
 }
@@ -610,18 +901,15 @@ function handleFileCapture(event) {
 function onBarcodeFound(text) {
   const cleaned = text.trim();
   if (!cleaned || cleaned.length < 4) {
-    showScanResult('err', '⚠ Luettu arvo liian lyhyt: "' + text + '"');
-    return;
+    showScanResult('err', '⚠ Liian lyhyt arvo: "' + text + '"'); return;
   }
-  // Flash
-  const flash = document.getElementById('cam-flash');
-  if (flash) { flash.style.opacity = '0.3'; setTimeout(() => { flash.style.opacity = '0'; }, 160); }
-
+  const f = document.getElementById('cam-flash');
+  if (f) { f.style.opacity = '0.28'; setTimeout(() => { f.style.opacity = '0'; }, 150); }
   const added = addSerial(cleaned);
   if (added) {
     showScanResult('ok', '✓ Luettu: ' + cleaned);
     toast('✓ ' + cleaned, 'ok');
-    if (navigator.vibrate) navigator.vibrate(80);
+    if (navigator.vibrate) navigator.vibrate(70);
   }
 }
 
@@ -641,9 +929,6 @@ function showScanError(msg) {
   el.textContent = '⚠ ' + msg; el.classList.add('show');
 }
 
-// Pysäytä kamera jos navigoidaan pois lomakkeelta
-function goBack() { stopLiveScan(); showScreen('select'); }
-
 // ══ SUBMIT ══
 function submitForm() {
   if (serialSet.size === 0) return;
@@ -657,7 +942,8 @@ function submitForm() {
     document.getElementById('success-title').textContent = c.successTitle;
     document.getElementById('success-sub').textContent = c.successSub;
     const now = new Date();
-    const ts = now.toLocaleDateString('fi-FI') + ' ' + now.toLocaleTimeString('fi-FI',{hour:'2-digit',minute:'2-digit'});
+    const ts = now.toLocaleDateString('fi-FI') + ' '
+             + now.toLocaleTimeString('fi-FI', {hour:'2-digit', minute:'2-digit'});
     const ref = 'REF-' + Math.floor(Math.random()*90000+10000);
     document.getElementById('success-meta').innerHTML =
       '<div class="meta-row"><span class="meta-k">Asentaja</span><span class="meta-v">' + currentUser.name + '</span></div>' +
@@ -666,12 +952,15 @@ function submitForm() {
       '<div class="meta-row"><span class="meta-k">Aikaleima</span><span class="meta-v">' + ts + '</span></div>' +
       '<div class="meta-row"><span class="meta-k">Viite</span><span class="meta-v">' + ref + '</span></div>';
     showScreen('success');
-  }, 1500);
+  }, 1400);
 }
 function newAction() { serialSet.clear(); showScreen('select'); }
 
 // ══ HELPERS ══
-function showLoading(msg) { document.getElementById('loading-txt').textContent = msg; document.getElementById('loading-overlay').classList.add('on'); }
+function showLoading(msg) {
+  document.getElementById('loading-txt').textContent = msg;
+  document.getElementById('loading-overlay').classList.add('on');
+}
 function hideLoading() { document.getElementById('loading-overlay').classList.remove('on'); }
 let toastT;
 function toast(msg, type) {
@@ -679,6 +968,7 @@ function toast(msg, type) {
   t.textContent = msg; t.className = 'toast show' + (type ? ' ' + type : '');
   clearTimeout(toastT); toastT = setTimeout(() => t.className = 'toast', 2800);
 }
+document.addEventListener('visibilitychange', () => { if (document.hidden) stopLiveScan(); });
 </script>
 </body>
 </html>
